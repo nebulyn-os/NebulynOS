@@ -1,4 +1,5 @@
-﻿using Nebulyn.System.Declarations.Generic;
+﻿using Nebulyn.System.Declarations.Drivers;
+using Nebulyn.System.Declarations.Generic;
 using Nebulyn.System.Derivatives.Drivers;
 using System;
 using System.Collections.Generic;
@@ -45,5 +46,39 @@ namespace Nebulyn.System.Core.Drivers
         {
             return drivers.AsReadOnly();
         }
+        public static void ListDrivers()
+        {
+            if (drivers.Count == 0)
+            {
+                Console.WriteLine("No drivers registered.");
+                return;
+            }
+
+            int nameWidth = Math.Max(15, drivers.Max(d => d.Identify().Name.Length));
+            int manufacturerWidth = Math.Max(20, drivers.Max(d => d.Identify().Manufacturer.Length));
+            int purposeWidth = Math.Max(20, drivers.Max(d => SDriverInfo.GetDriverPurposeString(d.Identify().DriverPurpose).Length));
+
+            string separator = "+"
+                + new string('-', nameWidth + 2) + "+"
+                + new string('-', manufacturerWidth + 2) + "+"
+                + new string('-', purposeWidth + 2) + "+";
+
+            // Header
+            Console.WriteLine(separator);
+            Console.WriteLine($"| {"Name".PadRight(nameWidth)} | {"Manufacturer".PadRight(manufacturerWidth)} | {"Purpose".PadRight(purposeWidth)} |");
+            Console.WriteLine(separator);
+            Console.ForegroundColor = ConsoleColor.Gray;
+            // Rows
+            foreach (var driver in drivers)
+            {
+                var info = driver.Identify();
+                var purpose = SDriverInfo.GetDriverPurposeString(info.DriverPurpose);
+
+                Console.WriteLine($"| {info.Name.PadRight(nameWidth)} | {info.Manufacturer.PadRight(manufacturerWidth)} | {purpose.PadRight(purposeWidth)} |");
+                Console.WriteLine(separator);
+            }
+            Console.ResetColor();
+        }
+
     }
 }

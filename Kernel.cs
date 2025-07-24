@@ -1,6 +1,7 @@
 ﻿using Nebulyn.System.Core.Drivers;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Sys = Cosmos.System;
 
@@ -24,13 +25,22 @@ namespace Nebulyn
             }
 
             logger.Log("Nebulyn Kernel is starting...");
-            string loggerInfo = logger.Identify().ToString();
+
             Console.Clear();
-            Console.WriteLine(loggerInfo);
-            string[] logs = logger.GetCompiledLogs();
-            foreach (string log in logs)
+            DriverList.ListDrivers();
+            string[] logs = logger.GetLogs().ToArray();
+
+            if (logs.Length > 0)
             {
-                Console.WriteLine(log);
+                Console.WriteLine("Logs:");
+                foreach (var log in logs)
+                {
+                    Console.WriteLine(log);
+                }
+            }
+            else
+            {
+                Console.WriteLine("No logs available.");
             }
         }
 
