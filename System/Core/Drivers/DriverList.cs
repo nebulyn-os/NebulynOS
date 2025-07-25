@@ -46,12 +46,11 @@ namespace Nebulyn.System.Core.Drivers
         {
             return drivers.AsReadOnly();
         }
-        public static void ListDrivers()
+        public static SGenericStatus ListDrivers()
         {
             if (drivers.Count == 0)
             {
-                Console.WriteLine("No drivers registered.");
-                return;
+                return SGenericStatus.Failure(EGenericResult.NotFound, "No drivers registered.");   
             }
 
             int nameWidth = Math.Max(15, drivers.Max(d => d.Identify().Name.Length));
@@ -78,7 +77,24 @@ namespace Nebulyn.System.Core.Drivers
                 Console.WriteLine(separator);
             }
             Console.ResetColor();
+
+            return SGenericStatus.Success("Drivers listed successfully.");
         }
 
+        public static SGenericStatus GetDriverById(string deviceId, out IDriver driver)
+        {
+            if (string.IsNullOrEmpty(deviceId))
+            {
+                driver = null;
+                return SGenericStatus.Failure(EGenericResult.InvalidArgument, "Device ID cannot be null or empty.");
+            }
+            driver = drivers.FirstOrDefault(d => d.Identify().DeviceID.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
+
+            if (driver != null)
+            {
+                return SGenericStatus.Success("Driver found successfully.");
+            }
+            return SGenericStatus.Failure(EGenericResult.NotFound, "Driver with the specified Device ID not found.");
+        }
     }
 }

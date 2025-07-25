@@ -10,6 +10,7 @@ namespace Nebulyn
     public class Kernel : Sys.Kernel
     {
         GenericLogger logger;
+        RuntimeExecution runtimeExecution;
         protected override void BeforeRun()
         {
             logger = new GenericLogger();
@@ -17,31 +18,34 @@ namespace Nebulyn
             if (status.IsSuccess)
             {
                 logger.Start();
-                logger.Log("Logger installed successfully and started.");
             }
             else
             {
                 Console.WriteLine($"Logger installation failed: {status.Message}");
             }
 
+            runtimeExecution = new RuntimeExecution();
+            status = runtimeExecution.Install();
+            if (status.IsSuccess)
+            {
+                runtimeExecution.Start();
+            }
+            else
+            {
+                Console.WriteLine($"Runtime Execution installation failed: {status.Message}");
+            }
+
             logger.Log("Nebulyn Kernel is starting...");
 
             Console.Clear();
             DriverList.ListDrivers();
-            string[] logs = logger.GetLogs().ToArray();
 
-            if (logs.Length > 0)
-            {
-                Console.WriteLine("Logs:");
-                foreach (var log in logs)
-                {
-                    Console.WriteLine(log);
-                }
-            }
-            else
-            {
-                Console.WriteLine("No logs available.");
-            }
+            runtimeExecution.SetInstruction(RuntimeExecution.SingleInstruction.HLT);
+            runtimeExecution.Execute();
+
+            logger.PrintLogs();
+
+
         }
 
         protected override void Run()

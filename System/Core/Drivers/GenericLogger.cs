@@ -3,6 +3,7 @@ using Nebulyn.System.Declarations.Generic;
 using Nebulyn.System.Derivatives.Drivers;
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace Nebulyn.System.Core.Drivers
 {
@@ -96,6 +97,21 @@ namespace Nebulyn.System.Core.Drivers
             return SGenericStatus.Success("Message logged successfully.");
         }
 
+        public SGenericStatus DriverLog(DriverBase driver, string message)
+        {
+            if (!IsActive)
+                return SGenericStatus.Failure(EGenericResult.InvalidState, "Generic Logger is not active and cannot log messages.");
+
+            if (string.IsNullOrWhiteSpace(message))
+                return SGenericStatus.Failure(EGenericResult.InvalidArgument, "Log message cannot be null or empty.");
+
+            if (driver == null)
+                return SGenericStatus.Failure(EGenericResult.InvalidArgument, "Driver cannot be null.");
+
+            _logs.Add((DateTime.UtcNow, $"[{driver.Identify().Name}]: {message}"));
+            return SGenericStatus.Success("Message logged successfully.");
+        }
+
         public IReadOnlyList<string> GetLogs()
             => _logs == null ? Array.Empty<string>() : _logs.ConvertAll(l => l.Message);
 
@@ -119,9 +135,38 @@ namespace Nebulyn.System.Core.Drivers
             var compiled = new string[_logs.Count];
             for (int i = 0; i < _logs.Count; i++)
             {
-                compiled[i] = $"{_logs[i].Timestamp:o}: {_logs[i].Message}";
+                compiled[i] = $"{_logs[i].Timestamp.ToString()}: {_logs[i].Message}";
             }
             return compiled;
+        }
+
+        public SGenericStatus DumpLogs(string filePath)
+        {
+            if (!IsActive)
+                return SGenericStatus.Failure(EGenericResult.InvalidState, "Generic Logger is not active and cannot dump logs.");
+            if (string.IsNullOrWhiteSpace(filePath))
+                return SGenericStatus.Failure(EGenericResult.InvalidArgument, "File path cannot be null or empty.");
+            try
+            {
+                File.WriteAllLines(filePath, GetCompiledLogs());
+                return SGenericStatus.Success("Logs dumped successfully.");
+            }
+            catch (Exception ex)
+            {
+                return SGenericStatus.Failure(EGenericResult.UnknownError, $"Failed to dump logs: {ex.Message}");
+            }
+        }
+
+        public SGenericStatus PrintLogs()
+        {
+            IReadOnlyList<string> compiledLogs = this.GetCompiledLogs();
+            if (compiledLogs.Count == 0)
+                return SGenericStatus.Failure(EGenericResult.NotFound, "No logs available to print.");
+            foreach (var log in compiledLogs)
+            {
+                Console.WriteLine(log);
+            }
+            return SGenericStatus.Success("Logs printed successfully.");
         }
     }
 }
