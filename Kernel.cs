@@ -1,4 +1,9 @@
-﻿using Nebulyn.System.Core.Drivers;
+﻿using Cosmos.Core.Memory;
+using Cosmos.System.Graphics;
+using Cosmos.System.Graphics.Fonts;
+using Nebulyn.System.Core.Drivers;
+using Nebulyn.System.Core.Temps;
+using Nebulyn.System.Terminal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +18,11 @@ namespace Nebulyn
         RuntimeExecution runtimeExecution;
         protected override void BeforeRun()
         {
+            Globals.Canvas = new CGSCanvas();
+            Globals.Terminal = new(
+                PCScreenFont.Default,Globals.Canvas,
+                Globals.Canvas.Width, Globals.Canvas.Height);
+
             logger = new GenericLogger();
             var status = logger.Install();
             if (status.IsSuccess)
@@ -45,15 +55,20 @@ namespace Nebulyn
 
             logger.PrintLogs();
 
+            CommandsRegistryService.RegisterCommands();
 
+            Globals.Terminal.Draw(0, 0);
+            Globals.Canvas.Display();
         }
 
         protected override void Run()
         {
-            Console.Write("Input: ");
-            var input = Console.ReadLine();
-            Console.Write("Text typed: ");
-            Console.WriteLine(input);
+            Globals.Terminal.UpdateInput();
+            Globals.Terminal.Draw(0,0);
+            Globals.Canvas.Display();
+
+            if (Globals.Ticks % 20 == 0) Heap.Collect();
+            Globals.Ticks++;
         }
     }
 }
