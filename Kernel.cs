@@ -66,20 +66,12 @@ namespace Nebulyn
                 .Execute();
 
 
-            char[] vendorString = new char[12];
-            vendorString[0] = (char)(ebx & 0xFF);
-            vendorString[1] = (char)((ebx >> 8) & 0xFF);
-            vendorString[2] = (char)((ebx >> 16) & 0xFF);
-            vendorString[3] = (char)((ebx >> 24) & 0xFF);
-            vendorString[4] = (char)(edx & 0xFF);
-            vendorString[5] = (char)((edx >> 8) & 0xFF);
-            vendorString[6] = (char)((edx >> 16) & 0xFF);
-            vendorString[7] = (char)((edx >> 24) & 0xFF);
-            vendorString[8] = (char)(ecx & 0xFF);
-            vendorString[9] = (char)((ecx >> 8) & 0xFF);
-            vendorString[10] = (char)((ecx >> 16) & 0xFF);
-            vendorString[11] = (char)((ecx >> 24) & 0xFF);
-            string vendor = new string(vendorString);
+            byte[] vendorBytes = new byte[12];
+            Buffer.BlockCopy(BitConverter.GetBytes(ebx), 0, vendorBytes, 0, 4);
+            Buffer.BlockCopy(BitConverter.GetBytes(edx), 0, vendorBytes, 4, 4);
+            Buffer.BlockCopy(BitConverter.GetBytes(ecx), 0, vendorBytes, 8, 4);
+            string vendor = Encoding.ASCII.GetString(vendorBytes);
+
 
             logger.Log($"CPU Vendor: {vendor}");
 
