@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace StarDustCosmos
+namespace Nebulyn.System.Terminal
 {
     public static class ANSIConstants
     {

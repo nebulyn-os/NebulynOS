@@ -10,6 +10,9 @@ using System.Linq;
 using System.Text;
 using Sys = Cosmos.System;
 
+using static Nebulyn.System.Core.Drivers.RuntimeExecution;
+using Nebulyn.System.Declarations.Generic;
+
 namespace Nebulyn
 {
     public class Kernel : Sys.Kernel
@@ -34,24 +37,43 @@ namespace Nebulyn
                 Console.WriteLine($"Logger installation failed: {status.Message}");
             }
 
+            logger.Log("Nebulyn Kernel is starting...");
+
             runtimeExecution = new RuntimeExecution();
             status = runtimeExecution.Install();
             if (status.IsSuccess)
             {
                 runtimeExecution.Start();
+                runtimeExecution.Clear();
             }
             else
             {
-                Console.WriteLine($"Runtime Execution installation failed: {status.Message}");
+                logger.Log($"Runtime Execution installation failed: {status.Message}");
             }
 
-            logger.Log("Nebulyn Kernel is starting...");
+            int loops = 5;
+
+            SGenericStatus returnValue = runtimeExecution.CreateScript()
+                .Mov(Register.ECX, loops)
+                .Xor(Operand.Reg(Register.EAX), Operand.Reg(Register.EAX))
+                .Label("TLabel")
+                .Inc(Operand.Reg(Register.EAX))
+                .Loop("TLabel")
+                .Label("TEnd")
+                .Ret()
+                .ExecuteWithReturn(out int runtimeResult);
+
+            if (returnValue.IsSuccess)
+            {
+                logger.Log($"Runtime script executed successfully, return value: {runtimeResult}");
+            }
+            else
+            {
+                logger.Log($"Runtime script execution failed: {returnValue.Message}");
+            }
 
             Console.Clear();
             DriverList.ListDrivers();
-
-            runtimeExecution.SetInstruction(RuntimeExecution.SingleInstruction.HLT);
-            runtimeExecution.Execute();
 
             logger.PrintLogs();
 

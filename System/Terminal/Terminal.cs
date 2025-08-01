@@ -7,6 +7,7 @@ using Cosmos.System;
 using Cosmos.System.Graphics;
 using Cosmos.System.Graphics.Fonts;
 using Nebulyn.System.Derivatives.Graphics;
+using Nebulyn.System.Terminal;
 
 namespace StarDustCosmos
 {
