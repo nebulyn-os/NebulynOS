@@ -13,6 +13,9 @@ using Sys = Cosmos.System;
 using static Nebulyn.System.Core.Drivers.RuntimeExecution;
 using Nebulyn.System.Declarations.Generic;
 using Cosmos.Core;
+using Cosmos.System.FileSystem.VFS;
+using Cosmos.System.FileSystem;
+using System.IO;
 
 namespace Nebulyn
 {
@@ -23,10 +26,18 @@ namespace Nebulyn
         DriverHandler.GenericDriverBundle driverBundle;
         protected override void BeforeRun()
         {
+            CosmosVFS vfs = new();
+            VFSManager.RegisterVFS(vfs);
+
             Globals.Canvas = new CGSCanvas();
             Globals.Terminal = new(
                 PCScreenFont.Default,Globals.Canvas,
                 Globals.Canvas.Width, Globals.Canvas.Height);
+
+            if (!File.Exists(@"0:\TerminalPalette.cfg"))
+                Globals.Terminal.LoadPalette(File.ReadAllText(@"1:\DefaultTerminalPalette.cfg"));
+            else
+                Globals.Terminal.LoadPalette(File.ReadAllText(@"0:\TerminalPalette.cfg"));
 
             driverBundle = DriverHandler.InstallAll();
             DriverHandler.StartAll(driverBundle);
