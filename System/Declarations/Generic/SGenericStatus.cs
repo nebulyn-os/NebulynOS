@@ -23,7 +23,7 @@ namespace Nebulyn.System.Declarations.Generic
 
         public static SGenericStatus Failure(EGenericResult error = EGenericResult.UnknownError, string message = "")
         {
-            return new SGenericStatus(error, message);
+            return new SGenericStatus(error, "\x1b[31m"+message+ "\x1b[0m");
         }
 
         public bool IsSuccess

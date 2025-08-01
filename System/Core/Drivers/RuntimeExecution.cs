@@ -1745,7 +1745,7 @@ namespace Nebulyn.System.Core.Drivers
         {
             if (IsActive)
             {
-                Logger.DriverLog(this, "Runtime Executor is already installed and active.");
+                Logger.DriverLog(this, "Runtime Executor is already installed and active.",GenericLogger.Status.Error);
                 return SGenericStatus.Failure(EGenericResult.AlreadyExists, "Runtime Executor is already installed.");
             }
 
@@ -1766,7 +1766,7 @@ namespace Nebulyn.System.Core.Drivers
 
             DriverList.RegisterDriver(this);
 
-            Logger.DriverLog(this, "Runtime Executor installed successfully.");
+            Logger.DriverLog(this, "Runtime Executor installed successfully.",GenericLogger.Status.Ok);
             return SGenericStatus.Success("Runtime Executor installed successfully.");
         }
 
@@ -1780,7 +1780,7 @@ namespace Nebulyn.System.Core.Drivers
             IsActive = false;
             IsActive = true;
 
-            Logger.DriverLog(this, "Runtime Executor restarted successfully.");
+            Logger.DriverLog(this, "Runtime Executor restarted successfully.",GenericLogger.Status.Ok);
             return SGenericStatus.Success("Runtime Executor restarted successfully.");
         }
 
@@ -1788,12 +1788,12 @@ namespace Nebulyn.System.Core.Drivers
         {
             if (IsActive)
             {
-                Logger.DriverLog(this, "Runtime Executor is already active.");
+                Logger.DriverLog(this, "Runtime Executor is already active.",GenericLogger.Status.Error);
                 return SGenericStatus.Failure(EGenericResult.InvalidState, "Runtime Executor is already active.");
             }
             IsActive = true;
 
-            Logger.DriverLog(this, "Runtime Executor started successfully.");
+            Logger.DriverLog(this, "Runtime Executor started successfully.",GenericLogger.Status.Ok);
             return SGenericStatus.Success("Runtime Executor started successfully.");
         }
 
@@ -1801,11 +1801,11 @@ namespace Nebulyn.System.Core.Drivers
         {
             if (!IsActive)
             {
-                Logger.DriverLog(this, "Runtime Executor is not active and cannot be stopped.");
+                Logger.DriverLog(this, "Runtime Executor is not active and cannot be stopped.",GenericLogger.Status.Error);
                 return SGenericStatus.Failure(EGenericResult.InvalidState, "Runtime Executor is not active.");
             }
             IsActive = false;
-            Logger.DriverLog(this, "Runtime Executor stopped successfully.");
+            Logger.DriverLog(this, "Runtime Executor stopped successfully.",GenericLogger.Status.Ok);
             return SGenericStatus.Success("Runtime Executor stopped successfully.");
         }
 
@@ -1813,11 +1813,11 @@ namespace Nebulyn.System.Core.Drivers
         {
             if (!IsActive)
             {
-                Logger.DriverLog(this, "Runtime Executor is not active and cannot be uninstalled.");
+                Logger.DriverLog(this, "Runtime Executor is not active and cannot be uninstalled.",GenericLogger.Status.Error);
                 return SGenericStatus.Failure(EGenericResult.InvalidState, "Runtime Executor is not active and cannot be uninstalled.");
             }
             IsActive = false;
-            Logger.DriverLog(this, "Uninstalling Runtime Executor...");
+            Logger.DriverLog(this, "Uninstalling Runtime Executor...",GenericLogger.Status.Info);
             Logger = null;
             DriverList.UnregisterDriver(this);
             return SGenericStatus.Success("Runtime Executor uninstalled successfully.");

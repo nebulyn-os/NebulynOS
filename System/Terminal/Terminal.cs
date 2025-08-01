@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using Cosmos.Core;
 using Cosmos.System;
@@ -21,6 +22,7 @@ namespace StarDustCosmos
         public Color ClearColor = Color.Black;
         public Color BackColor = Color.Black;
         public string InputPrefix = "> ";
+        public TerminalPalette Palette = TerminalPalette.Default;
 
         List<string> CommandsHistory = new();
         public Dictionary<string, Action<string[]>> Commands = new();
@@ -45,6 +47,63 @@ namespace StarDustCosmos
         #endregion
 
         #region Methods
+
+        #region Other
+        public void LoadPalette(string Data)
+        {
+            var DataLines = Data.Replace("\r", "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+            TerminalPalette palette = TerminalPalette.Default;
+
+            foreach (var item in DataLines)
+            {
+                var Uncommented = "";
+                if (item.Contains("-"))
+                    Uncommented = item.Substring(0, item.IndexOf("-")).Trim();
+
+                if (Uncommented.Length > 0)
+                {
+                    var parts = Uncommented.Split('=');
+                    if (parts.Length == 2)
+                    {
+                        if (int.TryParse(parts[0].Trim(),out var num))
+                        {
+                            palette.SetFromAnsiNumber(num, HexToColor(parts[1].Trim()));
+                        }
+                    }
+                }
+            }
+
+            Palette = palette;
+        }
+
+        public static Color HexToColor(string hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex))
+                throw new ArgumentException("Hex string is null or empty", nameof(hex));
+
+            if (hex.StartsWith("#"))
+                hex = hex.Substring(1);
+
+            if (hex.Length != 6 && hex.Length != 8)
+                throw new ArgumentException("Expected 6 or 8 hex digits (RRGGBB or AARRGGBB)", nameof(hex));
+
+            int a = 255;
+            int idx = 0;
+            if (hex.Length == 8)
+            {
+                a = int.Parse(hex.Substring(0, 2), NumberStyles.HexNumber);
+                idx = 2;
+            }
+
+            int r = int.Parse(hex.Substring(idx, 2), NumberStyles.HexNumber);
+            int g = int.Parse(hex.Substring(idx + 2, 2), NumberStyles.HexNumber);
+            int b = int.Parse(hex.Substring(idx + 4, 2), NumberStyles.HexNumber);
+
+            return Color.FromArgb(a, r, g, b);
+        }
+        #endregion
+
         #region Drawing
         public void Clear()
         {
@@ -194,8 +253,13 @@ namespace StarDustCosmos
                         var codes = colbuffer.Split(';');
                         foreach (var item in codes)
                         {
-                            if (ANSIConstants.Foregrounds.ContainsKey(item)) TextColor = ANSIConstants.Foregrounds[item];
-                            if (ANSIConstants.Backgrounds.ContainsKey(item)) BackColor = ANSIConstants.Backgrounds[item];
+                            if (int.TryParse(item, out var num))
+                            {
+                                if (num >= 30 && num <= 39)
+                                    TextColor = Palette.GetFromAnsiNumber(num);
+                                else if (num >= 40 && num <= 49)
+                                    BackColor = Palette.GetFromAnsiNumber(num);
+                            }
                             Kernel.PrintDebug(item);
                         }
                         if (BackColor == Color.Transparent) BackColor = ClearColor;

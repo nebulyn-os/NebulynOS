@@ -9,6 +9,27 @@ namespace Nebulyn.System.Core.Drivers
 {
     public class GenericLogger : DriverBase
     {
+        public enum Status
+        {
+            Ok,
+            Warning,
+            Error,
+            Info,
+            Generic
+        }
+
+        string GetANSIColor(Status status)
+        {
+            return status switch
+            {
+                Status.Ok => "\x1b[32m", // Green
+                Status.Warning => "\x1b[33m", // Yellow
+                Status.Error => "\x1b[31m", // Red
+                Status.Info => "\x1b[34m", // Blue
+                _ => "\x1b[0m" // Reset
+            };
+        }
+
         private List<(DateTime Timestamp, string Message)> _logs;
 
         protected override bool IsActive
@@ -85,7 +106,7 @@ namespace Nebulyn.System.Core.Drivers
             return SGenericStatus.Success("Generic Logger uninstalled successfully.");
         }
 
-        public SGenericStatus Log(string message)
+        public SGenericStatus Log(string message,Status status = Status.Generic)
         {
             if (!IsActive)
                 return SGenericStatus.Failure(EGenericResult.InvalidState, "Generic Logger is not active and cannot log messages.");
@@ -93,11 +114,11 @@ namespace Nebulyn.System.Core.Drivers
             if (string.IsNullOrWhiteSpace(message))
                 return SGenericStatus.Failure(EGenericResult.InvalidArgument, "Log message cannot be null or empty.");
 
-            _logs.Add((DateTime.UtcNow, message));
+            _logs.Add((DateTime.UtcNow, GetANSIColor(status) + message+ "\x1b[0m"));
             return SGenericStatus.Success("Message logged successfully.");
         }
 
-        public SGenericStatus DriverLog(DriverBase driver, string message)
+        public SGenericStatus DriverLog(DriverBase driver, string message, Status status = Status.Generic)
         {
             if (!IsActive)
                 return SGenericStatus.Failure(EGenericResult.InvalidState, "Generic Logger is not active and cannot log messages.");
@@ -108,7 +129,7 @@ namespace Nebulyn.System.Core.Drivers
             if (driver == null)
                 return SGenericStatus.Failure(EGenericResult.InvalidArgument, "Driver cannot be null.");
 
-            _logs.Add((DateTime.UtcNow, $"[{driver.Identify().Name}]: {message}"));
+            _logs.Add((DateTime.UtcNow, $"\x1b[36m[{driver.Identify().Name}]\x1b[0m: {GetANSIColor(status) + message}\x1b[0m"));
             return SGenericStatus.Success("Message logged successfully.");
         }
 
@@ -135,7 +156,7 @@ namespace Nebulyn.System.Core.Drivers
             var compiled = new string[_logs.Count];
             for (int i = 0; i < _logs.Count; i++)
             {
-                compiled[i] = $"{_logs[i].Timestamp.ToString()}: {_logs[i].Message}";
+                compiled[i] = $"\x1b[35m{_logs[i].Timestamp.ToString()}\x1b[0m: {_logs[i].Message}";
             }
             return compiled;
         }
