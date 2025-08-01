@@ -748,7 +748,7 @@ namespace Nebulyn.System.Core.Drivers
 
             public ScriptBuilder Cdq() { _runtime.WriteByte(0x99); return this; } // Sign extend EAX to EDX:EAX
             public ScriptBuilder Pushf() { _runtime.WriteByte(0x9C); return this; }
-            public ScriptBuilder Popf() { _runtime.WriteByte(0x9D); return this; }
+            // Removed duplicate Popf() - using the one from later in the file
 
             // LEA (Load Effective Address)
             public ScriptBuilder Lea(Register dest, Operand src)
@@ -1197,6 +1197,464 @@ namespace Nebulyn.System.Core.Drivers
             }
 
             public ScriptBuilder Leave() { _runtime.WriteByte(0xC9); return this; }
+
+            // System instructions for OS development
+            public ScriptBuilder Lgdt(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x01);
+                EncodeOperand(operand, 2);
+                return this;
+            }
+
+            public ScriptBuilder Lidt(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x01);
+                EncodeOperand(operand, 3);
+                return this;
+            }
+
+            public ScriptBuilder Sgdt(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x01);
+                EncodeOperand(operand, 0);
+                return this;
+            }
+
+            public ScriptBuilder Sidt(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x01);
+                EncodeOperand(operand, 1);
+                return this;
+            }
+
+            public ScriptBuilder Lldt(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x00);
+                EncodeOperand(operand, 2);
+                return this;
+            }
+
+            public ScriptBuilder Sldt(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x00);
+                EncodeOperand(operand, 0);
+                return this;
+            }
+
+            public ScriptBuilder Ltr(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x00);
+                EncodeOperand(operand, 3);
+                return this;
+            }
+
+            public ScriptBuilder Str(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x00);
+                EncodeOperand(operand, 1);
+                return this;
+            }
+
+            // Control register operations - complete versions with proper overloads
+            public ScriptBuilder MovCrToReg(Register reg, Register crReg)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x20);
+                _runtime.WriteModRM(0b11, (byte)crReg, (byte)reg);
+                return this;
+            }
+
+            public ScriptBuilder MovRegToCr(Register crReg, Register reg)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x22);
+                _runtime.WriteModRM(0b11, (byte)crReg, (byte)reg);
+                return this;
+            }
+
+            // Debug register operations - renamed to avoid conflicts
+            public ScriptBuilder MovDrToReg(Register reg, Register drReg)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x21);
+                _runtime.WriteModRM(0b11, (byte)drReg, (byte)reg);
+                return this;
+            }
+
+            public ScriptBuilder MovRegToDr(Register drReg, Register reg)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x23);
+                _runtime.WriteModRM(0b11, (byte)drReg, (byte)reg);
+                return this;
+            }
+
+            // Test register operations - renamed to avoid conflicts (mostly obsolete but included for completeness)
+            public ScriptBuilder MovTrToReg(Register reg, Register trReg)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x24);
+                _runtime.WriteModRM(0b11, (byte)trReg, (byte)reg);
+                return this;
+            }
+
+            public ScriptBuilder MovRegToTr(Register trReg, Register reg)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x26);
+                _runtime.WriteModRM(0b11, (byte)trReg, (byte)reg);
+                return this;
+            }
+
+            // Memory management instructions
+            public ScriptBuilder Invd() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x08); return this; }
+            public ScriptBuilder Wbinvd() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x09); return this; }
+
+            public ScriptBuilder Invlpg(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x01);
+                EncodeOperand(operand, 7);
+                return this;
+            }
+
+            // Segment loading instructions
+            public ScriptBuilder Lss(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0xB2);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            public ScriptBuilder Lfs(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0xB4);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            public ScriptBuilder Lgs(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0xB5);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            // Privilege level instructions
+            public ScriptBuilder Arpl(Operand dest, Register src)
+            {
+                _runtime.WriteByte(0x63);
+                EncodeOperand(dest, (byte)src);
+                return this;
+            }
+
+            public ScriptBuilder Lar(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x02);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            public ScriptBuilder Lsl(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x03);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            public ScriptBuilder Verr(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x00);
+                EncodeOperand(operand, 4);
+                return this;
+            }
+
+            public ScriptBuilder Verw(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x00);
+                EncodeOperand(operand, 5);
+                return this;
+            }
+
+            // Task switching instructions
+            public ScriptBuilder Clts() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x06); return this; }
+
+            // Model-specific register operations
+            public ScriptBuilder Rdmsr() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x32); return this; }
+            public ScriptBuilder Wrmsr() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x30); return this; }
+
+            // Time stamp counter
+            public ScriptBuilder Rdtsc() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x31); return this; }
+            public ScriptBuilder Rdtscp() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xF9); return this; }
+
+            // Performance monitoring
+            public ScriptBuilder Rdpmc() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x33); return this; }
+
+            // System management mode
+            public ScriptBuilder Rsm() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0xAA); return this; }
+
+            // CPU identification
+            public ScriptBuilder Cpuid() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0xA2); return this; }
+
+            // Memory fencing and serialization
+            public ScriptBuilder Mfence() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0xAE); _runtime.WriteByte(0xF0); return this; }
+            public ScriptBuilder Sfence() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0xAE); _runtime.WriteByte(0xF8); return this; }
+            public ScriptBuilder Lfence() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0xAE); _runtime.WriteByte(0xE8); return this; }
+
+            // Prefetch instructions
+            public ScriptBuilder Prefetch0(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x18);
+                EncodeOperand(operand, 1);
+                return this;
+            }
+
+            public ScriptBuilder Prefetch1(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x18);
+                EncodeOperand(operand, 2);
+                return this;
+            }
+
+            public ScriptBuilder Prefetch2(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x18);
+                EncodeOperand(operand, 3);
+                return this;
+            }
+
+            public ScriptBuilder Prefetchnta(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0x18);
+                EncodeOperand(operand, 0);
+                return this;
+            }
+
+            // Cache control instructions
+            public ScriptBuilder Clflush(Operand operand)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0xAE);
+                EncodeOperand(operand, 7);
+                return this;
+            }
+
+            // Monitor/Mwait instructions
+            public ScriptBuilder Monitor() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xC8); return this; }
+            public ScriptBuilder Mwait() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xC9); return this; }
+
+            // Virtual machine extensions
+            public ScriptBuilder Vmcall() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xC1); return this; }
+            public ScriptBuilder Vmlaunch() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xC2); return this; }
+            public ScriptBuilder Vmresume() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xC3); return this; }
+            public ScriptBuilder Vmxoff() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xC4); return this; }
+
+            // Secure virtual machine extensions
+            public ScriptBuilder Skinit() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xDE); return this; }
+            public ScriptBuilder Stgi() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xDC); return this; }
+            public ScriptBuilder Clgi() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x01); _runtime.WriteByte(0xDD); return this; }
+
+            // Advanced debugging
+            public ScriptBuilder Icebp() { _runtime.WriteByte(0xF1); return this; } // Undocumented breakpoint
+            public ScriptBuilder Ud2() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x0B); return this; } // Undefined instruction
+
+            // Far control transfers
+            public ScriptBuilder CallFar(short segment, int offset)
+            {
+                _runtime.WriteByte(0x9A);
+                _runtime.WriteInt32(offset);
+                _runtime.WriteInt16(segment);
+                return this;
+            }
+
+            public ScriptBuilder JmpFar(short segment, int offset)
+            {
+                _runtime.WriteByte(0xEA);
+                _runtime.WriteInt32(offset);
+                _runtime.WriteInt16(segment);
+                return this;
+            }
+
+            public ScriptBuilder RetFar() { _runtime.WriteByte(0xCB); return this; }
+            public ScriptBuilder RetFar(short stackAdjust) 
+            { 
+                _runtime.WriteByte(0xCA); 
+                _runtime.WriteInt16(stackAdjust);
+                return this; 
+            }
+
+            // Segment override prefixes
+            public ScriptBuilder SegCs() { _runtime.WriteByte(0x2E); return this; }
+            public ScriptBuilder SegSs() { _runtime.WriteByte(0x36); return this; }
+            public ScriptBuilder SegDs() { _runtime.WriteByte(0x3E); return this; }
+            public ScriptBuilder SegEs() { _runtime.WriteByte(0x26); return this; }
+            public ScriptBuilder SegFs() { _runtime.WriteByte(0x64); return this; }
+            public ScriptBuilder SegGs() { _runtime.WriteByte(0x65); return this; }
+
+            // Address size override
+            public ScriptBuilder AddrSize() { _runtime.WriteByte(0x67); return this; }
+
+            // Floating point control (x87 FPU basics)
+            public ScriptBuilder Finit() { _runtime.WriteByte(0x9B); _runtime.WriteByte(0xDB); _runtime.WriteByte(0xE3); return this; }
+            public ScriptBuilder Fninit() { _runtime.WriteByte(0xDB); _runtime.WriteByte(0xE3); return this; }
+            public ScriptBuilder Fclex() { _runtime.WriteByte(0x9B); _runtime.WriteByte(0xDB); _runtime.WriteByte(0xE2); return this; }
+            public ScriptBuilder Fnclex() { _runtime.WriteByte(0xDB); _runtime.WriteByte(0xE2); return this; }
+            public ScriptBuilder Fwait() { _runtime.WriteByte(0x9B); return this; }
+
+            // Basic FPU load/store
+            public ScriptBuilder Fld(Operand operand)
+            {
+                if (operand.Size == OperandSize.Dword)
+                {
+                    _runtime.WriteByte(0xD9);
+                    EncodeOperand(operand, 0);
+                }
+                else // Assume double (8 bytes)
+                {
+                    _runtime.WriteByte(0xDD);
+                    EncodeOperand(operand, 0);
+                }
+                return this;
+            }
+
+            public ScriptBuilder Fst(Operand operand)
+            {
+                if (operand.Size == OperandSize.Dword)
+                {
+                    _runtime.WriteByte(0xD9);
+                    EncodeOperand(operand, 2);
+                }
+                else
+                {
+                    _runtime.WriteByte(0xDD);
+                    EncodeOperand(operand, 2);
+                }
+                return this;
+            }
+
+            public ScriptBuilder Fstp(Operand operand)
+            {
+                if (operand.Size == OperandSize.Dword)
+                {
+                    _runtime.WriteByte(0xD9);
+                    EncodeOperand(operand, 3);
+                }
+                else
+                {
+                    _runtime.WriteByte(0xDD);
+                    EncodeOperand(operand, 3);
+                }
+                return this;
+            }
+
+            // FPU arithmetic
+            public ScriptBuilder Fadd() { _runtime.WriteByte(0xDE); _runtime.WriteByte(0xC1); return this; }
+            public ScriptBuilder Fsub() { _runtime.WriteByte(0xDE); _runtime.WriteByte(0xE9); return this; }
+            public ScriptBuilder Fmul() { _runtime.WriteByte(0xDE); _runtime.WriteByte(0xC9); return this; }
+            public ScriptBuilder Fdiv() { _runtime.WriteByte(0xDE); _runtime.WriteByte(0xF9); return this; }
+
+            // MMX/SSE basics (for completeness)
+            public ScriptBuilder Emms() { _runtime.WriteByte(0x0F); _runtime.WriteByte(0x77); return this; }
+
+            // Pause instruction (for spin loops)
+            public ScriptBuilder Pause() { _runtime.WriteByte(0xF3); _runtime.WriteByte(0x90); return this; }
+
+            // LAHF/SAHF for flag manipulation
+            public ScriptBuilder Lahf() { _runtime.WriteByte(0x9F); return this; }
+            public ScriptBuilder Sahf() { _runtime.WriteByte(0x9E); return this; }
+
+            // Additional string operations
+            public ScriptBuilder Ins(OperandSize size = OperandSize.Dword)
+            {
+                WriteOperandSizePrefix(size);
+                byte opcode = size == OperandSize.Byte ? (byte)0x6C : (byte)0x6D;
+                _runtime.WriteByte(opcode);
+                return this;
+            }
+
+            public ScriptBuilder Outs(OperandSize size = OperandSize.Dword)
+            {
+                WriteOperandSizePrefix(size);
+                byte opcode = size == OperandSize.Byte ? (byte)0x6E : (byte)0x6F;
+                _runtime.WriteByte(opcode);
+                return this;
+            }
+
+            // Load flags
+            public ScriptBuilder Popf() { _runtime.WriteByte(0x9D); return this; }
+
+            // XLAT instruction
+            public ScriptBuilder Xlat() { _runtime.WriteByte(0xD7); return this; }
+
+            // Load all registers
+            public ScriptBuilder Popa() { _runtime.WriteByte(0x61); return this; }
+            public ScriptBuilder Pusha() { _runtime.WriteByte(0x60); return this; }
+
+            // Byte swap
+            public ScriptBuilder Bswap(Register reg)
+            {
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte((byte)(0xC8 + (byte)reg));
+                return this;
+            }
+
+            // Advanced bit manipulation (newer instructions)
+            public ScriptBuilder Popcnt(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0xF3);
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0xB8);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            public ScriptBuilder Lzcnt(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0xF3);
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0xBD);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            public ScriptBuilder Tzcnt(Register dest, Operand src)
+            {
+                _runtime.WriteByte(0xF3);
+                _runtime.WriteByte(0x0F);
+                _runtime.WriteByte(0xBC);
+                EncodeOperand(src, (byte)dest);
+                return this;
+            }
+
+            // Atomic operations for multiprocessor systems
+            public ScriptBuilder Xadd(Operand dest, Register src)
+            {
+                WriteOperandSizePrefix(dest.Size);
+                _runtime.WriteByte(0x0F);
+                byte opcode = dest.Size == OperandSize.Byte ? (byte)0xC0 : (byte)0xC1;
+                _runtime.WriteByte(opcode);
+                EncodeOperand(dest, (byte)src);
+                return this;
+            }
 
             // Finalize and execute
             public SGenericStatus Execute()
