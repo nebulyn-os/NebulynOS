@@ -32,7 +32,7 @@ namespace Nebulyn.System.Core.Drivers
                 manufacturer: "Nebulyn Systems",
                 deviceId: "2d6aa0a6-b8f1-4321-b0b5-0a71520edae9",
                 driverInstallType: EDriverInstallType.BuiltIn,
-                driverPurpose: EDriverPurpose.Output,
+                driverPurpose: EDriverPurpose.Diagnostic,
                 installationDate: DateTime.UtcNow,
                 isActive: IsActive,
                 filePath: string.Empty
