@@ -15,7 +15,7 @@ using Nebulyn.System.Declarations.Generic;
 
 namespace Nebulyn
 {
-    public class Kernel : Sys.Kernel
+    public unsafe class Kernel : Sys.Kernel
     {
         GenericLogger logger;
         RuntimeExecution runtimeExecution;
@@ -51,20 +51,37 @@ namespace Nebulyn
                 logger.Log($"Runtime Execution installation failed: {status.Message}");
             }
 
-            int loops = 5;
+            int ebx = 0;
+            int edx = 0;
+            int ecx = 0;
 
             SGenericStatus returnValue = runtimeExecution.CreateScript()
-                
-                .ExecuteWithReturn(out int runtimeResult);
 
-            if (returnValue.IsSuccess)
-            {
-                logger.Log($"Runtime script executed successfully, return value: {runtimeResult}");
-            }
-            else
-            {
-                logger.Log($"Runtime script execution failed: {returnValue.Message}");
-            }
+                .Xor(Operand.Reg(Register.EAX), Operand.Reg(Register.EAX)) // Set EAX = 0
+                .Cpuid()
+                .MovToVariable(&ebx, Register.EBX)  // EBX = "Genu" or "Auth"
+                .MovToVariable(&edx, Register.EDX)  // EDX = "ineI" or "enti"
+                .MovToVariable(&ecx, Register.ECX)  // ECX = "ntel" or "cAMD"
+                .Ret()
+                .Execute();
+
+
+            char[] vendorString = new char[12];
+            vendorString[0] = (char)(ebx & 0xFF);
+            vendorString[1] = (char)((ebx >> 8) & 0xFF);
+            vendorString[2] = (char)((ebx >> 16) & 0xFF);
+            vendorString[3] = (char)((ebx >> 24) & 0xFF);
+            vendorString[4] = (char)(edx & 0xFF);
+            vendorString[5] = (char)((edx >> 8) & 0xFF);
+            vendorString[6] = (char)((edx >> 16) & 0xFF);
+            vendorString[7] = (char)((edx >> 24) & 0xFF);
+            vendorString[8] = (char)(ecx & 0xFF);
+            vendorString[9] = (char)((ecx >> 8) & 0xFF);
+            vendorString[10] = (char)((ecx >> 16) & 0xFF);
+            vendorString[11] = (char)((ecx >> 24) & 0xFF);
+            string vendor = new string(vendorString);
+
+            logger.Log($"CPU Vendor: {vendor}");
 
             Console.Clear();
             DriverList.ListDrivers();

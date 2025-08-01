@@ -417,6 +417,48 @@ namespace Nebulyn.System.Core.Drivers
                 return this;
             }
 
+            public ScriptBuilder MovFromVariable(Register dest, void* address)
+            {
+                if (address == null)
+                    throw new ArgumentNullException(nameof(address), "Address cannot be null.");
+                
+                if (dest == Register.EAX)
+                {
+                    // Use special encoding for EAX: MOV EAX, [moffs32]
+                    _runtime.WriteByte(0xA1);
+                    _runtime.WriteInt32((int)address);
+                }
+                else
+                {
+                    // Use standard encoding: MOV reg, [disp32]
+                    _runtime.WriteByte(0x8B); // MOV r32, r/m32
+                    _runtime.WriteByte((byte)(0x05 + ((byte)dest << 3))); // ModR/M: 00 reg 101 (disp32)
+                    _runtime.WriteInt32((int)address);
+                }
+                return this;
+            }
+
+            public ScriptBuilder MovToVariable(void* address, Register src)
+            {
+                if (address == null)
+                    throw new ArgumentNullException(nameof(address), "Address cannot be null.");
+                
+                if (src == Register.EAX)
+                {
+                    // Use special encoding for EAX: MOV [moffs32], EAX
+                    _runtime.WriteByte(0xA3);
+                    _runtime.WriteInt32((int)address);
+                }
+                else
+                {
+                    // Use standard encoding: MOV [disp32], reg
+                    _runtime.WriteByte(0x89); // MOV r/m32, r32
+                    _runtime.WriteByte((byte)(0x05 + ((byte)src << 3))); // ModR/M: 00 reg 101 (disp32)
+                    _runtime.WriteInt32((int)address);
+                }
+                return this;
+            }
+
             // Loop instructions
             public ScriptBuilder Loop(string label)
             {
