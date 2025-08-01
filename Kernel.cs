@@ -12,6 +12,7 @@ using Sys = Cosmos.System;
 
 using static Nebulyn.System.Core.Drivers.RuntimeExecution;
 using Nebulyn.System.Declarations.Generic;
+using Cosmos.Core;
 
 namespace Nebulyn
 {
@@ -51,29 +52,28 @@ namespace Nebulyn
                 logger.Log($"Runtime Execution installation failed: {status.Message}");
             }
 
-            int ebx = 0;
-            int edx = 0;
-            int ecx = 0;
+            int testin = 5;
+            try
+            {
+                SGenericStatus returnValue = runtimeExecution.CreateScript()
 
-            SGenericStatus returnValue = runtimeExecution.CreateScript()
+                    .Xor(Operand.Reg(Register.EAX), Operand.Reg(Register.EAX)) // Set EAX = 0
+                    .Literal($"mov eax, {testin}")
+                    .Literal($"mov ebx, 5")
+                    .Literal($"add eax, ebx")
+                    .Literal($"mov [{(uint)&testin}], eax") // Store result (testin + 5) back to testin
+                    .Literal("ret")
+                    .Execute();
 
-                .Xor(Operand.Reg(Register.EAX), Operand.Reg(Register.EAX)) // Set EAX = 0
-                .Cpuid()
-                .MovToVariable(&ebx, Register.EBX)  // EBX = "Genu" or "Auth"
-                .MovToVariable(&edx, Register.EDX)  // EDX = "ineI" or "enti"
-                .MovToVariable(&ecx, Register.ECX)  // ECX = "ntel" or "cAMD"
-                .Ret()
-                .Execute();
+                logger.Log($"Assembly script executed successfully. Result: {testin}");
+            }
+            catch (Exception ex)
+            {
+                logger.Log($"Error executing assembly script: {ex.Message}");
+            }
 
-
-            byte[] vendorBytes = new byte[12];
-            Buffer.BlockCopy(BitConverter.GetBytes(ebx), 0, vendorBytes, 0, 4);
-            Buffer.BlockCopy(BitConverter.GetBytes(edx), 0, vendorBytes, 4, 4);
-            Buffer.BlockCopy(BitConverter.GetBytes(ecx), 0, vendorBytes, 8, 4);
-            string vendor = Encoding.ASCII.GetString(vendorBytes);
-
-
-            logger.Log($"CPU Vendor: {vendor}");
+            
+            
 
             Console.Clear();
             DriverList.ListDrivers();

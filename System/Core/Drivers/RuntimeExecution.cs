@@ -321,6 +321,12 @@ namespace Nebulyn.System.Core.Drivers
                         _runtime.WriteSIB(scaleBits, (byte)operand.IndexRegister, (byte)operand.BaseRegister);
                         WriteDisplacement(operand.Displacement);
                         break;
+
+                    case AddressingMode.Displacement:
+                        // Direct memory addressing: [disp32] - ModR/M = 00 reg 101
+                        _runtime.WriteModRM(0b00, regOpcode, 0b101);
+                        _runtime.WriteInt32(operand.Displacement);
+                        break;
                 }
             }
 
@@ -381,21 +387,21 @@ namespace Nebulyn.System.Core.Drivers
                             _runtime.WriteInt32(src.ImmediateValue);
                     }
                 }
-                else if (dest.Mode == AddressingMode.Register && (src.Mode == AddressingMode.Memory || src.Mode == AddressingMode.IndexedDisplacement))
+                else if (dest.Mode == AddressingMode.Register && (src.Mode == AddressingMode.Memory || src.Mode == AddressingMode.IndexedDisplacement || src.Mode == AddressingMode.Displacement))
                 {
                     // MOV reg, mem
                     byte opcode = dest.Size == OperandSize.Byte ? (byte)0x8A : (byte)0x8B;
                     _runtime.WriteByte(opcode);
                     EncodeOperand(src, (byte)dest.Register);
                 }
-                else if ((dest.Mode == AddressingMode.Memory || dest.Mode == AddressingMode.IndexedDisplacement) && src.Mode == AddressingMode.Register)
+                else if ((dest.Mode == AddressingMode.Memory || dest.Mode == AddressingMode.IndexedDisplacement || dest.Mode == AddressingMode.Displacement) && src.Mode == AddressingMode.Register)
                 {
                     // MOV mem, reg
                     byte opcode = src.Size == OperandSize.Byte ? (byte)0x88 : (byte)0x89;
                     _runtime.WriteByte(opcode);
                     EncodeOperand(dest, (byte)src.Register);
                 }
-                else if ((dest.Mode == AddressingMode.Memory || dest.Mode == AddressingMode.IndexedDisplacement) && src.Mode == AddressingMode.Immediate)
+                else if ((dest.Mode == AddressingMode.Memory || dest.Mode == AddressingMode.IndexedDisplacement || dest.Mode == AddressingMode.Displacement) && src.Mode == AddressingMode.Immediate)
                 {
                     // MOV mem, imm
                     byte opcode = dest.Size == OperandSize.Byte ? (byte)0xC6 : (byte)0xC7;
@@ -1722,6 +1728,1324 @@ namespace Nebulyn.System.Core.Drivers
             public ScriptBuilder Pop(Register reg) => Pop(Operand.Reg(reg));
             public ScriptBuilder Inc(Register reg) => Inc(Operand.Reg(reg));
             public ScriptBuilder Dec(Register reg) => Dec(Operand.Reg(reg));
+
+            // Literal assembly parser - allows direct assembly code input
+            public ScriptBuilder Literal(string assembly)
+            {
+                if (string.IsNullOrWhiteSpace(assembly))
+                    return this;
+
+                // Parse the assembly line
+                string cleanAsm = assembly.Trim().ToLowerInvariant();
+                string[] parts = cleanAsm.Split(new char[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                
+                if (parts.Length == 0)
+                    return this;
+
+                string instruction = parts[0];
+
+                try
+                {
+                    switch (instruction)
+                    {
+                        // Data movement
+                        case "mov":
+                            return ParseMov(parts);
+                        case "lea":
+                            return ParseLea(parts);
+                        case "xchg":
+                            return ParseXchg(parts);
+
+                        // Arithmetic
+                        case "add":
+                            return ParseArithmetic(parts, (d, s) => Add(d, s));
+                        case "sub":
+                            return ParseArithmetic(parts, (d, s) => Sub(d, s));
+                        case "mul":
+                            return ParseUnary(parts, o => Mul(o));
+                        case "imul":
+                            return ParseImul(parts);
+                        case "div":
+                            return ParseUnary(parts, o => Div(o));
+                        case "idiv":
+                            return ParseUnary(parts, o => Idiv(o));
+                        case "inc":
+                            return ParseUnary(parts, o => Inc(o));
+                        case "dec":
+                            return ParseUnary(parts, o => Dec(o));
+                        case "neg":
+                            return ParseUnary(parts, o => Neg(o));
+
+                        // Logical
+                        case "and":
+                            return ParseArithmetic(parts, (d, s) => And(d, s));
+                        case "or":
+                            return ParseArithmetic(parts, (d, s) => Or(d, s));
+                        case "xor":
+                            return ParseArithmetic(parts, (d, s) => Xor(d, s));
+                        case "not":
+                            return ParseUnary(parts, o => Not(o));
+                        case "test":
+                            return ParseArithmetic(parts, (d, s) => Test(d, s));
+                        case "cmp":
+                            return ParseArithmetic(parts, (d, s) => Cmp(d, s));
+
+                        // Shifts
+                        case "shl":
+                            return ParseShift(parts, (d, s) => Shl(d, s));
+                        case "shr":
+                            return ParseShift(parts, (d, s) => Shr(d, s));
+                        case "sar":
+                            return ParseShift(parts, (d, s) => Sar(d, s));
+                        case "rol":
+                            return ParseShift(parts, (d, s) => Rol(d, s));
+                        case "ror":
+                            return ParseShift(parts, (d, s) => Ror(d, s));
+
+                        // Stack operations
+                        case "push":
+                            return ParseUnary(parts, o => Push(o));
+                        case "pop":
+                            return ParseUnary(parts, o => Pop(o));
+
+                        // Control flow
+                        case "jmp":
+                            return ParseJump(parts);
+                        case "call":
+                            return ParseCall(parts);
+                        case "ret":
+                            return ParseRet(parts);
+
+                        // Conditional jumps
+                        case "je":
+                        case "jz":
+                            return ParseConditionalJump(parts, Condition.Zero);
+                        case "jne":
+                        case "jnz":
+                            return ParseConditionalJump(parts, Condition.NotZero);
+                        case "jl":
+                        case "jnge":
+                            return ParseConditionalJump(parts, Condition.Less);
+                        case "jle":
+                        case "jng":
+                            return ParseConditionalJump(parts, Condition.LessEqual);
+                        case "jg":
+                        case "jnle":
+                            return ParseConditionalJump(parts, Condition.Greater);
+                        case "jge":
+                        case "jnl":
+                            return ParseConditionalJump(parts, Condition.GreaterEqual);
+                        case "jb":
+                        case "jc":
+                        case "jnae":
+                            return ParseConditionalJump(parts, Condition.Carry);
+                        case "jbe":
+                        case "jna":
+                            return ParseConditionalJump(parts, Condition.BelowEqual);
+                        case "ja":
+                        case "jnbe":
+                            return ParseConditionalJump(parts, Condition.Above);
+                        case "jae":
+                        case "jnb":
+                        case "jnc":
+                            return ParseConditionalJump(parts, Condition.NoCarry);
+                        case "jo":
+                            return ParseConditionalJump(parts, Condition.Overflow);
+                        case "jno":
+                            return ParseConditionalJump(parts, Condition.NoOverflow);
+                        case "js":
+                            return ParseConditionalJump(parts, Condition.Sign);
+                        case "jns":
+                            return ParseConditionalJump(parts, Condition.NoSign);
+                        case "jp":
+                        case "jpe":
+                            return ParseConditionalJump(parts, Condition.Parity);
+                        case "jnp":
+                        case "jpo":
+                            return ParseConditionalJump(parts, Condition.NoParity);
+
+                        // Loop instructions
+                        case "loop":
+                            return ParseLoop(parts, (label) => Loop(label));
+                        case "loope":
+                        case "loopz":
+                            return ParseLoop(parts, (label) => Loope(label));
+                        case "loopne":
+                        case "loopnz":
+                            return ParseLoop(parts, (label) => Loopne(label));
+
+                        // Miscellaneous
+                        case "nop":
+                            return Nop();
+                        case "cdq":
+                            return Cdq();
+                        case "pushf":
+                            return Pushf();
+                        case "popf":
+                            return Popf();
+                        case "clc":
+                            return Clc();
+                        case "stc":
+                            return Stc();
+                        case "cmc":
+                            return Cmc();
+                        case "cld":
+                            return Cld();
+                        case "std":
+                            return Std();
+                        case "cli":
+                            return Cli();
+                        case "sti":
+                            return Sti();
+
+                        // String instructions with prefixes
+                        case "rep":
+                            return Rep();
+                        case "repe":
+                        case "repz":
+                            return Repe();
+                        case "repne":
+                        case "repnz":
+                            return Repne();
+
+                        // String operations
+                        case "movs":
+                        case "movsb":
+                            return ParseStringOperation(parts, size => Movs(size), OperandSize.Byte);
+                        case "movsw":
+                            return ParseStringOperation(parts, size => Movs(size), OperandSize.Word);
+                        case "movsd":
+                            return ParseStringOperation(parts, size => Movs(size), OperandSize.Dword);
+                        case "cmps":
+                        case "cmpsb":
+                            return ParseStringOperation(parts, size => Cmps(size), OperandSize.Byte);
+                        case "cmpsw":
+                            return ParseStringOperation(parts, size => Cmps(size), OperandSize.Word);
+                        case "cmpsd":
+                            return ParseStringOperation(parts, size => Cmps(size), OperandSize.Dword);
+                        case "scas":
+                        case "scasb":
+                            return ParseStringOperation(parts, size => Scas(size), OperandSize.Byte);
+                        case "scasw":
+                            return ParseStringOperation(parts, size => Scas(size), OperandSize.Word);
+                        case "scasd":
+                            return ParseStringOperation(parts, size => Scas(size), OperandSize.Dword);
+                        case "lods":
+                        case "lodsb":
+                            return ParseStringOperation(parts, size => Lods(size), OperandSize.Byte);
+                        case "lodsw":
+                            return ParseStringOperation(parts, size => Lods(size), OperandSize.Word);
+                        case "lodsd":
+                            return ParseStringOperation(parts, size => Lods(size), OperandSize.Dword);
+                        case "stos":
+                        case "stosb":
+                            return ParseStringOperation(parts, size => Stos(size), OperandSize.Byte);
+                        case "stosw":
+                            return ParseStringOperation(parts, size => Stos(size), OperandSize.Word);
+                        case "stosd":
+                            return ParseStringOperation(parts, size => Stos(size), OperandSize.Dword);
+
+                        // Bit operations
+                        case "bt":
+                            return ParseBitOperation(parts, (d, s) => Bt(d, s));
+                        case "bts":
+                            return ParseBitOperation(parts, (d, s) => Bts(d, s));
+                        case "btr":
+                            return ParseBitOperation(parts, (d, s) => Btr(d, s));
+                        case "btc":
+                            return ParseBitOperation(parts, (d, s) => Btc(d, s));
+                        case "bsf":
+                            return ParseBitScan(parts, (d, s) => Bsf(d, s));
+                        case "bsr":
+                            return ParseBitScan(parts, (d, s) => Bsr(d, s));
+
+                        // Conditional operations
+                        case "sete":
+                        case "setz":
+                            return ParseSetcc(parts, Condition.Zero);
+                        case "setne":
+                        case "setnz":
+                            return ParseSetcc(parts, Condition.NotZero);
+                        case "setl":
+                        case "setnge":
+                            return ParseSetcc(parts, Condition.Less);
+                        case "setle":
+                        case "setng":
+                            return ParseSetcc(parts, Condition.LessEqual);
+                        case "setg":
+                        case "setnle":
+                            return ParseSetcc(parts, Condition.Greater);
+                        case "setge":
+                        case "setnl":
+                            return ParseSetcc(parts, Condition.GreaterEqual);
+                        case "setb":
+                        case "setc":
+                        case "setnae":
+                            return ParseSetcc(parts, Condition.Carry);
+                        case "setbe":
+                        case "setna":
+                            return ParseSetcc(parts, Condition.BelowEqual);
+                        case "seta":
+                        case "setnbe":
+                            return ParseSetcc(parts, Condition.Above);
+                        case "setae":
+                        case "setnb":
+                        case "setnc":
+                            return ParseSetcc(parts, Condition.NoCarry);
+                        case "seto":
+                            return ParseSetcc(parts, Condition.Overflow);
+                        case "setno":
+                            return ParseSetcc(parts, Condition.NoOverflow);
+                        case "sets":
+                            return ParseSetcc(parts, Condition.Sign);
+                        case "setns":
+                            return ParseSetcc(parts, Condition.NoSign);
+                        case "setp":
+                        case "setpe":
+                            return ParseSetcc(parts, Condition.Parity);
+                        case "setnp":
+                        case "setpo":
+                            return ParseSetcc(parts, Condition.NoParity);
+
+                        // Conditional moves
+                        case "cmove":
+                        case "cmovz":
+                            return ParseCmov(parts, Condition.Zero);
+                        case "cmovne":
+                        case "cmovnz":
+                            return ParseCmov(parts, Condition.NotZero);
+                        case "cmovl":
+                        case "cmovnge":
+                            return ParseCmov(parts, Condition.Less);
+                        case "cmovle":
+                        case "cmovng":
+                            return ParseCmov(parts, Condition.LessEqual);
+                        case "cmovg":
+                        case "cmovnle":
+                            return ParseCmov(parts, Condition.Greater);
+                        case "cmovge":
+                        case "cmovnl":
+                            return ParseCmov(parts, Condition.GreaterEqual);
+                        case "cmovb":
+                        case "cmovc":
+                        case "cmovnae":
+                            return ParseCmov(parts, Condition.Carry);
+                        case "cmovbe":
+                        case "cmovna":
+                            return ParseCmov(parts, Condition.BelowEqual);
+                        case "cmova":
+                        case "cmovnbe":
+                            return ParseCmov(parts, Condition.Above);
+                        case "cmovae":
+                        case "cmovnb":
+                        case "cmovnc":
+                            return ParseCmov(parts, Condition.NoCarry);
+                        case "cmovo":
+                            return ParseCmov(parts, Condition.Overflow);
+                        case "cmovno":
+                            return ParseCmov(parts, Condition.NoOverflow);
+                        case "cmovs":
+                            return ParseCmov(parts, Condition.Sign);
+                        case "cmovns":
+                            return ParseCmov(parts, Condition.NoSign);
+                        case "cmovp":
+                        case "cmovpe":
+                            return ParseCmov(parts, Condition.Parity);
+                        case "cmovnp":
+                        case "cmovpo":
+                            return ParseCmov(parts, Condition.NoParity);
+
+                        // Double precision shifts
+                        case "shld":
+                            return ParseDoubleShift(parts, (d, s, c) => Shld(d, s, c));
+                        case "shrd":
+                            return ParseDoubleShift(parts, (d, s, c) => Shrd(d, s, c));
+
+                        // Arithmetic with carry/borrow
+                        case "adc":
+                            return ParseArithmetic(parts, (d, s) => Adc(d, s));
+                        case "sbb":
+                            return ParseArithmetic(parts, (d, s) => Sbb(d, s));
+
+                        // Exchange operations
+                        case "cmpxchg":
+                            return ParseCmpxchg(parts);
+                        case "cmpxchg8b":
+                            return ParseUnary(parts, o => Cmpxchg8b(o));
+                        case "xadd":
+                            return ParseXadd(parts);
+
+                        // Segment operations
+                        case "lds":
+                            return ParseSegmentLoad(parts, (d, s) => Lds(d, s));
+                        case "les":
+                            return ParseSegmentLoad(parts, (d, s) => Les(d, s));
+                        case "lfs":
+                            return ParseSegmentLoad(parts, (d, s) => Lfs(d, s));
+                        case "lgs":
+                            return ParseSegmentLoad(parts, (d, s) => Lgs(d, s));
+                        case "lss":
+                            return ParseSegmentLoad(parts, (d, s) => Lss(d, s));
+
+                        // Move with zero/sign extension
+                        case "movzx":
+                            return ParseMovExtend(parts, (d, s) => Movzx(d, s));
+                        case "movsx":
+                            return ParseMovExtend(parts, (d, s) => Movsx(d, s));
+
+                        // System instructions
+                        case "lgdt":
+                            return ParseUnary(parts, o => Lgdt(o));
+                        case "lidt":
+                            return ParseUnary(parts, o => Lidt(o));
+                        case "sgdt":
+                            return ParseUnary(parts, o => Sgdt(o));
+                        case "sidt":
+                            return ParseUnary(parts, o => Sidt(o));
+                        case "lldt":
+                            return ParseUnary(parts, o => Lldt(o));
+                        case "sldt":
+                            return ParseUnary(parts, o => Sldt(o));
+                        case "ltr":
+                            return ParseUnary(parts, o => Ltr(o));
+                        case "str":
+                            return ParseUnary(parts, o => Str(o));
+
+                        // Control register operations
+                        case "mov_cr_to_reg":
+                            return ParseControlRegMove(parts, true);
+                        case "mov_reg_to_cr":
+                            return ParseControlRegMove(parts, false);
+
+                        // Debug register operations
+                        case "mov_dr_to_reg":
+                            return ParseDebugRegMove(parts, true);
+                        case "mov_reg_to_dr":
+                            return ParseDebugRegMove(parts, false);
+
+                        // Test register operations
+                        case "mov_tr_to_reg":
+                            return ParseTestRegMove(parts, true);
+                        case "mov_reg_to_tr":
+                            return ParseTestRegMove(parts, false);
+
+                        // Cache operations
+                        case "invd":
+                            return Invd();
+                        case "wbinvd":
+                            return Wbinvd();
+                        case "invlpg":
+                            return ParseUnary(parts, o => Invlpg(o));
+                        case "clflush":
+                            return ParseUnary(parts, o => Clflush(o));
+
+                        // Memory barriers
+                        case "mfence":
+                            return Mfence();
+                        case "sfence":
+                            return Sfence();
+                        case "lfence":
+                            return Lfence();
+
+                        // Prefetch instructions
+                        case "prefetch0":
+                            return ParseUnary(parts, o => Prefetch0(o));
+                        case "prefetch1":
+                            return ParseUnary(parts, o => Prefetch1(o));
+                        case "prefetch2":
+                            return ParseUnary(parts, o => Prefetch2(o));
+                        case "prefetchnta":
+                            return ParseUnary(parts, o => Prefetchnta(o));
+
+                        // Processor identification
+                        case "cpuid":
+                            return Cpuid();
+
+                        // Time stamp operations
+                        case "rdtsc":
+                            return Rdtsc();
+                        case "rdtscp":
+                            return Rdtscp();
+                        case "rdpmc":
+                            return Rdpmc();
+
+                        // Model specific registers
+                        case "rdmsr":
+                            return Rdmsr();
+                        case "wrmsr":
+                            return Wrmsr();
+
+                        // Monitor/mwait
+                        case "monitor":
+                            return Monitor();
+                        case "mwait":
+                            return Mwait();
+
+                        // Interrupt operations
+                        case "int":
+                            return ParseInt(parts);
+                        case "into":
+                            return Into();
+                        case "iret":
+                            return Iret();
+
+                        // I/O operations
+                        case "in":
+                            return ParseIn(parts);
+                        case "out":
+                            return ParseOut(parts);
+                        case "ins":
+                        case "insb":
+                            return ParseStringOperation(parts, size => Ins(size), OperandSize.Byte);
+                        case "insw":
+                            return ParseStringOperation(parts, size => Ins(size), OperandSize.Word);
+                        case "insd":
+                            return ParseStringOperation(parts, size => Ins(size), OperandSize.Dword);
+                        case "outs":
+                        case "outsb":
+                            return ParseStringOperation(parts, size => Outs(size), OperandSize.Byte);
+                        case "outsw":
+                            return ParseStringOperation(parts, size => Outs(size), OperandSize.Word);
+                        case "outsd":
+                            return ParseStringOperation(parts, size => Outs(size), OperandSize.Dword);
+
+                        // ASCII operations
+                        case "aaa":
+                            return Aaa();
+                        case "aas":
+                            return Aas();
+                        case "aam":
+                            return Aam();
+                        case "aad":
+                            return Aad();
+                        case "daa":
+                            return Daa();
+                        case "das":
+                            return Das();
+
+                        // Miscellaneous operations
+                        case "hlt":
+                            return Hlt();
+                        case "wait":
+                        case "fwait":
+                            return Wait();
+                        case "lock":
+                            return Lock();
+                        case "lahf":
+                            return Lahf();
+                        case "sahf":
+                            return Sahf();
+                        case "xlat":
+                        case "xlatb":
+                            return Xlat();
+                        case "popa":
+                            return Popa();
+                        case "pusha":
+                            return Pusha();
+                        case "bswap":
+                            return ParseBswap(parts);
+                        case "pause":
+                            return Pause();
+                        case "emms":
+                            return Emms();
+                        case "rsm":
+                            return Rsm();
+                        case "clts":
+                            return Clts();
+
+                        // Advanced bit counting
+                        case "popcnt":
+                            return ParseBitCount(parts, (d, s) => Popcnt(d, s));
+                        case "lzcnt":
+                            return ParseBitCount(parts, (d, s) => Lzcnt(d, s));
+                        case "tzcnt":
+                            return ParseBitCount(parts, (d, s) => Tzcnt(d, s));
+
+                        // Security operations
+                        case "arpl":
+                            return ParseArpl(parts);
+                        case "lar":
+                            return ParseBitCount(parts, (d, s) => Lar(d, s));
+                        case "lsl":
+                            return ParseBitCount(parts, (d, s) => Lsl(d, s));
+                        case "verr":
+                            return ParseUnary(parts, o => Verr(o));
+                        case "verw":
+                            return ParseUnary(parts, o => Verw(o));
+
+                        // Stack frame operations
+                        case "bound":
+                            return ParseBound(parts);
+                        case "enter":
+                            return ParseEnter(parts);
+                        case "leave":
+                            return Leave();
+
+                        // Far operations
+                        case "call_far":
+                            return ParseCallFar(parts);
+                        case "jmp_far":
+                            return ParseJmpFar(parts);
+                        case "ret_far":
+                            return ParseRetFar(parts);
+
+                        // Segment prefixes
+                        case "cs:":
+                            return SegCs();
+                        case "ss:":
+                            return SegSs();
+                        case "ds:":
+                            return SegDs();
+                        case "es:":
+                            return SegEs();
+                        case "fs:":
+                            return SegFs();
+                        case "gs:":
+                            return SegGs();
+
+                        // Address size prefix
+                        case "addr16":
+                        case "addr32":
+                            return AddrSize();
+
+                        // Virtualization
+                        case "vmcall":
+                            return Vmcall();
+                        case "vmlaunch":
+                            return Vmlaunch();
+                        case "vmresume":
+                            return Vmresume();
+                        case "vmxoff":
+                            return Vmxoff();
+                        case "skinit":
+                            return Skinit();
+                        case "stgi":
+                            return Stgi();
+                        case "clgi":
+                            return Clgi();
+
+                        // Debug operations
+                        case "icebp":
+                            return Icebp();
+                        case "ud2":
+                            return Ud2();
+
+                        // FPU operations
+                        case "finit":
+                            return Finit();
+                        case "fninit":
+                            return Fninit();
+                        case "fclex":
+                            return Fclex();
+                        case "fnclex":
+                            return Fnclex();
+                        case "fld":
+                            return ParseFpuLoad(parts, o => Fld(o));
+                        case "fst":
+                            return ParseFpuStore(parts, o => Fst(o));
+                        case "fstp":
+                            return ParseFpuStore(parts, o => Fstp(o));
+                        case "fadd":
+                            return Fadd();
+                        case "fsub":
+                            return Fsub();
+                        case "fmul":
+                            return Fmul();
+                        case "fdiv":
+                            return Fdiv();
+
+                        default:
+                            throw new NotSupportedException($"Instruction '{instruction}' is not supported in Literal()");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException($"Failed to parse assembly instruction '{assembly}': {ex.Message}", ex);
+                }
+            }
+
+            private ScriptBuilder ParseMov(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("MOV requires destination and source operands");
+
+                var dest = ParseOperand(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return Mov(dest, src);
+            }
+
+            private ScriptBuilder ParseLea(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("LEA requires destination register and source memory operand");
+
+                var destReg = ParseRegister(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return Lea(destReg, src);
+            }
+
+            private ScriptBuilder ParseXchg(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("XCHG requires two operands");
+
+                var op1 = ParseOperand(parts[1]);
+                var op2 = ParseOperand(parts[2]);
+                return Xchg(op1, op2);
+            }
+
+            private ScriptBuilder ParseArithmetic(string[] parts, Func<Operand, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Arithmetic instruction requires destination and source operands");
+
+                var dest = ParseOperand(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return operation(dest, src);
+            }
+
+            private ScriptBuilder ParseUnary(string[] parts, Func<Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("Unary instruction requires one operand");
+
+                var operand = ParseOperand(parts[1]);
+                return operation(operand);
+            }
+
+            private ScriptBuilder ParseImul(string[] parts)
+            {
+                if (parts.Length == 2)
+                {
+                    // Single operand IMUL
+                    var operand = ParseOperand(parts[1]);
+                    return Imul(operand);
+                }
+                else if (parts.Length == 3)
+                {
+                    // Two operand IMUL
+                    var dest = ParseOperand(parts[1]);
+                    var src = ParseOperand(parts[2]);
+                    if (dest.Mode != AddressingMode.Register)
+                        throw new ArgumentException("IMUL destination must be a register");
+                    return Imul(dest, src);
+                }
+                else
+                {
+                    throw new ArgumentException("IMUL requires 1 or 2 operands");
+                }
+            }
+
+            private ScriptBuilder ParseShift(string[] parts, Func<Operand, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Shift instruction requires destination and count operands");
+
+                var dest = ParseOperand(parts[1]);
+                var count = ParseOperand(parts[2]);
+                return operation(dest, count);
+            }
+
+            private ScriptBuilder ParseJump(string[] parts)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("JMP requires a target");
+
+                string target = parts[1];
+                return Jmp(target);
+            }
+
+            private ScriptBuilder ParseCall(string[] parts)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("CALL requires a target");
+
+                string target = parts[1];
+                // Check if it's a label or operand
+                if (IsLabel(target))
+                {
+                    return Call(target);
+                }
+                else
+                {
+                    var operand = ParseOperand(target);
+                    return Call(operand);
+                }
+            }
+
+            private ScriptBuilder ParseRet(string[] parts)
+            {
+                if (parts.Length == 1)
+                {
+                    return Ret();
+                }
+                else if (parts.Length == 2)
+                {
+                    if (short.TryParse(parts[1], out short stackAdjust))
+                    {
+                        return Ret(stackAdjust);
+                    }
+                    else
+                    {
+                        throw new ArgumentException("RET stack adjustment must be a valid 16-bit integer");
+                    }
+                }
+                else
+                {
+                    throw new ArgumentException("RET takes 0 or 1 operand");
+                }
+            }
+
+            private ScriptBuilder ParseConditionalJump(string[] parts, Condition condition)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("Conditional jump requires a target label");
+
+                string target = parts[1];
+                return Jcc(condition, target);
+            }
+
+            private ScriptBuilder ParseLoop(string[] parts, Func<string, ScriptBuilder> operation)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("Loop instruction requires a target label");
+
+                string target = parts[1];
+                return operation(target);
+            }
+
+            private Operand ParseOperand(string operandStr)
+            {
+                operandStr = operandStr.Trim();
+
+                // Remove trailing comma if present
+                if (operandStr.EndsWith(","))
+                    operandStr = operandStr.Substring(0, operandStr.Length - 1);
+
+                // Check for memory operand [...]
+                if (operandStr.StartsWith("[") && operandStr.EndsWith("]"))
+                {
+                    return ParseMemoryOperand(operandStr.Substring(1, operandStr.Length - 2));
+                }
+
+                // Check for immediate value (starts with digit or negative sign)
+                if (char.IsDigit(operandStr[0]) || operandStr[0] == '-' || operandStr.StartsWith("0x"))
+                {
+                    return ParseImmediateOperand(operandStr);
+                }
+
+                // Must be a register
+                return Operand.Reg(ParseRegister(operandStr));
+            }
+
+            private Operand ParseMemoryOperand(string memoryExpr)
+            {
+                memoryExpr = memoryExpr.Trim();
+
+                // Parse expressions like:
+                // ebp+8, ebp-4, ebx+esi*2+16, etc.
+
+                Register baseReg = Register.EAX;
+                Register indexReg = Register.EAX;
+                byte scale = 1;
+                int displacement = 0;
+                bool hasBase = false;
+                bool hasIndex = false;
+
+                // Split by + and - while keeping the operators
+                var tokens = SplitMemoryExpression(memoryExpr);
+
+                int sign = 1;
+                foreach (var token in tokens)
+                {
+                    if (token == "+")
+                    {
+                        sign = 1;
+                        continue;
+                    }
+                    if (token == "-")
+                    {
+                        sign = -1;
+                        continue;
+                    }
+
+                    // Check if it's a scaled index (reg*scale)
+                    if (token.Contains("*"))
+                    {
+                        var scaleParts = token.Split('*');
+                        if (scaleParts.Length == 2)
+                        {
+                            indexReg = ParseRegister(scaleParts[0]);
+                            if (byte.TryParse(scaleParts[1], out byte parsedScale))
+                            {
+                                scale = parsedScale;
+                                hasIndex = true;
+                            }
+                        }
+                    }
+                    // Check if it's a register
+                    else if (IsRegister(token))
+                    {
+                        var reg = ParseRegister(token);
+                        if (!hasBase)
+                        {
+                            baseReg = reg;
+                            hasBase = true;
+                        }
+                        else if (!hasIndex)
+                        {
+                            indexReg = reg;
+                            hasIndex = true;
+                        }
+                    }
+                    // Must be a displacement
+                    else if (int.TryParse(token, out int disp) || 
+                             (token.StartsWith("0x") && int.TryParse(token.Substring(2), global::System.Globalization.NumberStyles.HexNumber, null, out disp)))
+                    {
+                        displacement += sign * disp;
+                    }
+
+                    sign = 1; // Reset sign for next token
+                }
+
+                if (hasIndex)
+                {
+                    return Operand.Mem(baseReg, indexReg, scale, displacement);
+                }
+                else if (hasBase)
+                {
+                    return Operand.Mem(baseReg, displacement);
+                }
+                else
+                {
+                    // Direct memory addressing with just displacement - use special direct addressing mode
+                    return new Operand 
+                    { 
+                        Mode = AddressingMode.Displacement, 
+                        Displacement = displacement, 
+                        Size = OperandSize.Dword 
+                    };
+                }
+            }
+
+            private List<string> SplitMemoryExpression(string expr)
+            {
+                var tokens = new List<string>();
+                var current = new global::System.Text.StringBuilder();
+
+                for (int i = 0; i < expr.Length; i++)
+                {
+                    char c = expr[i];
+                    if (c == '+' || c == '-')
+                    {
+                        if (current.Length > 0)
+                        {
+                            tokens.Add(current.ToString().Trim());
+                            current.Clear();
+                        }
+                        tokens.Add(c.ToString());
+                    }
+                    else
+                    {
+                        current.Append(c);
+                    }
+                }
+
+                if (current.Length > 0)
+                {
+                    tokens.Add(current.ToString().Trim());
+                }
+
+                return tokens;
+            }
+
+            private Operand ParseImmediateOperand(string immediateStr)
+            {
+                int value;
+                if (immediateStr.StartsWith("0x"))
+                {
+                    // Hexadecimal
+                    value = int.Parse(immediateStr.Substring(2), global::System.Globalization.NumberStyles.HexNumber);
+                }
+                else
+                {
+                    // Decimal
+                    value = int.Parse(immediateStr);
+                }
+
+                return Operand.Imm(value);
+            }
+
+            private Register ParseRegister(string regStr)
+            {
+                regStr = regStr.ToLowerInvariant().Trim();
+                
+                return regStr switch
+                {
+                    "eax" => Register.EAX,
+                    "ecx" => Register.ECX,
+                    "edx" => Register.EDX,
+                    "ebx" => Register.EBX,
+                    "esp" => Register.ESP,
+                    "ebp" => Register.EBP,
+                    "esi" => Register.ESI,
+                    "edi" => Register.EDI,
+                    _ => throw new ArgumentException($"Unknown register: {regStr}")
+                };
+            }
+
+            private bool IsRegister(string token)
+            {
+                token = token.ToLowerInvariant().Trim();
+                return token == "eax" || token == "ecx" || token == "edx" || token == "ebx" ||
+                       token == "esp" || token == "ebp" || token == "esi" || token == "edi";
+            }
+
+            private bool IsLabel(string token)
+            {
+                // Labels are anything that's not a register and doesn't look like a number
+                return !IsRegister(token) && 
+                       !char.IsDigit(token[0]) && 
+                       !token.StartsWith("-") && 
+                       !token.StartsWith("0x") &&
+                       !token.StartsWith("[");
+            }
+
+            // Additional parsing methods for all the new instructions
+            private ScriptBuilder ParseStringOperation(string[] parts, Func<OperandSize, ScriptBuilder> operation, OperandSize defaultSize)
+            {
+                return operation(defaultSize);
+            }
+
+            private ScriptBuilder ParseBitOperation(string[] parts, Func<Operand, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Bit operation requires destination and source operands");
+
+                var dest = ParseOperand(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return operation(dest, src);
+            }
+
+            private ScriptBuilder ParseBitScan(string[] parts, Func<Register, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Bit scan operation requires destination register and source operand");
+
+                var dest = ParseRegister(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return operation(dest, src);
+            }
+
+            private ScriptBuilder ParseSetcc(string[] parts, Condition condition)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("SETcc requires a destination operand");
+
+                var dest = ParseOperand(parts[1]);
+                return Setcc(condition, dest);
+            }
+
+            private ScriptBuilder ParseCmov(string[] parts, Condition condition)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("CMOVcc requires destination register and source operand");
+
+                var dest = ParseRegister(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return Cmovcc(condition, dest, src);
+            }
+
+            private ScriptBuilder ParseDoubleShift(string[] parts, Func<Operand, Register, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 4)
+                    throw new ArgumentException("Double shift requires destination, source register, and count operands");
+
+                var dest = ParseOperand(parts[1]);
+                var src = ParseRegister(parts[2]);
+                var count = ParseOperand(parts[3]);
+                return operation(dest, src, count);
+            }
+
+            private ScriptBuilder ParseCmpxchg(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("CMPXCHG requires destination and source operands");
+
+                var dest = ParseOperand(parts[1]);
+                var src = ParseRegister(parts[2]);
+                return Cmpxchg(dest, src);
+            }
+
+            private ScriptBuilder ParseXadd(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("XADD requires destination and source operands");
+
+                var dest = ParseOperand(parts[1]);
+                var src = ParseRegister(parts[2]);
+                return Xadd(dest, src);
+            }
+
+            private ScriptBuilder ParseSegmentLoad(string[] parts, Func<Register, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Segment load requires destination register and source operand");
+
+                var dest = ParseRegister(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return operation(dest, src);
+            }
+
+            private ScriptBuilder ParseMovExtend(string[] parts, Func<Register, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Move with extension requires destination register and source operand");
+
+                var dest = ParseRegister(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return operation(dest, src);
+            }
+
+            private ScriptBuilder ParseControlRegMove(string[] parts, bool crToReg)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Control register move requires two register operands");
+
+                var reg1 = ParseRegister(parts[1]);
+                var reg2 = ParseRegister(parts[2]);
+                
+                if (crToReg)
+                    return MovCrToReg(reg1, reg2);
+                else
+                    return MovRegToCr(reg1, reg2);
+            }
+
+            private ScriptBuilder ParseDebugRegMove(string[] parts, bool drToReg)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Debug register move requires two register operands");
+
+                var reg1 = ParseRegister(parts[1]);
+                var reg2 = ParseRegister(parts[2]);
+                
+                if (drToReg)
+                    return MovDrToReg(reg1, reg2);
+                else
+                    return MovRegToDr(reg1, reg2);
+            }
+
+            private ScriptBuilder ParseTestRegMove(string[] parts, bool trToReg)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Test register move requires two register operands");
+
+                var reg1 = ParseRegister(parts[1]);
+                var reg2 = ParseRegister(parts[2]);
+                
+                if (trToReg)
+                    return MovTrToReg(reg1, reg2);
+                else
+                    return MovRegToTr(reg1, reg2);
+            }
+
+            private ScriptBuilder ParseInt(string[] parts)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("INT requires an interrupt number");
+
+                if (byte.TryParse(parts[1], out byte interrupt))
+                {
+                    return Int(interrupt);
+                }
+                else if (parts[1].StartsWith("0x") && byte.TryParse(parts[1].Substring(2), global::System.Globalization.NumberStyles.HexNumber, null, out interrupt))
+                {
+                    return Int(interrupt);
+                }
+                else
+                {
+                    throw new ArgumentException("INT interrupt number must be a valid byte value");
+                }
+            }
+
+            private ScriptBuilder ParseIn(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("IN requires destination register and port");
+
+                var dest = ParseRegister(parts[1]);
+                var portStr = parts[2];
+
+                if (byte.TryParse(portStr, out byte port))
+                {
+                    return In(dest, port);
+                }
+                else if (portStr.StartsWith("0x") && byte.TryParse(portStr.Substring(2), global::System.Globalization.NumberStyles.HexNumber, null, out port))
+                {
+                    return In(dest, port);
+                }
+                else if (IsRegister(portStr))
+                {
+                    var portReg = ParseRegister(portStr);
+                    return In(dest, portReg);
+                }
+                else
+                {
+                    throw new ArgumentException("IN port must be a byte value or DX register");
+                }
+            }
+
+            private ScriptBuilder ParseOut(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("OUT requires port and source register");
+
+                var portStr = parts[1];
+                var src = ParseRegister(parts[2]);
+
+                if (byte.TryParse(portStr, out byte port))
+                {
+                    return Out(port, src);
+                }
+                else if (portStr.StartsWith("0x") && byte.TryParse(portStr.Substring(2), global::System.Globalization.NumberStyles.HexNumber, null, out port))
+                {
+                    return Out(port, src);
+                }
+                else if (IsRegister(portStr))
+                {
+                    var portReg = ParseRegister(portStr);
+                    return Out(portReg, src);
+                }
+                else
+                {
+                    throw new ArgumentException("OUT port must be a byte value or DX register");
+                }
+            }
+
+            private ScriptBuilder ParseBswap(string[] parts)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("BSWAP requires a register operand");
+
+                var reg = ParseRegister(parts[1]);
+                return Bswap(reg);
+            }
+
+            private ScriptBuilder ParseBitCount(string[] parts, Func<Register, Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Bit count operation requires destination register and source operand");
+
+                var dest = ParseRegister(parts[1]);
+                var src = ParseOperand(parts[2]);
+                return operation(dest, src);
+            }
+
+            private ScriptBuilder ParseArpl(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("ARPL requires destination and source operands");
+
+                var dest = ParseOperand(parts[1]);
+                var src = ParseRegister(parts[2]);
+                return Arpl(dest, src);
+            }
+
+            private ScriptBuilder ParseBound(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("BOUND requires index register and bounds operand");
+
+                var index = ParseRegister(parts[1]);
+                var bounds = ParseOperand(parts[2]);
+                return Bound(index, bounds);
+            }
+
+            private ScriptBuilder ParseEnter(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("ENTER requires allocation size and nesting level");
+
+                if (short.TryParse(parts[1], out short allocSize) && byte.TryParse(parts[2], out byte nestingLevel))
+                {
+                    return Enter(allocSize, nestingLevel);
+                }
+                else
+                {
+                    throw new ArgumentException("ENTER parameters must be valid numeric values");
+                }
+            }
+
+            private ScriptBuilder ParseCallFar(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Far CALL requires segment and offset");
+
+                if (short.TryParse(parts[1], out short segment) && int.TryParse(parts[2], out int offset))
+                {
+                    return CallFar(segment, offset);
+                }
+                else
+                {
+                    throw new ArgumentException("Far CALL parameters must be valid numeric values");
+                }
+            }
+
+            private ScriptBuilder ParseJmpFar(string[] parts)
+            {
+                if (parts.Length < 3)
+                    throw new ArgumentException("Far JMP requires segment and offset");
+
+                if (short.TryParse(parts[1], out short segment) && int.TryParse(parts[2], out int offset))
+                {
+                    return JmpFar(segment, offset);
+                }
+                else
+                {
+                    throw new ArgumentException("Far JMP parameters must be valid numeric values");
+                }
+            }
+
+            private ScriptBuilder ParseRetFar(string[] parts)
+            {
+                if (parts.Length == 1)
+                {
+                    return RetFar();
+                }
+                else if (parts.Length == 2)
+                {
+                    if (short.TryParse(parts[1], out short stackAdjust))
+                    {
+                        return RetFar(stackAdjust);
+                    }
+                    else
+                    {
+                        throw new ArgumentException("Far RET stack adjustment must be a valid 16-bit integer");
+                    }
+                }
+                else
+                {
+                    throw new ArgumentException("Far RET takes 0 or 1 operand");
+                }
+            }
+
+            private ScriptBuilder ParseFpuLoad(string[] parts, Func<Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("FPU load requires a source operand");
+
+                var operand = ParseOperand(parts[1]);
+                return operation(operand);
+            }
+
+            private ScriptBuilder ParseFpuStore(string[] parts, Func<Operand, ScriptBuilder> operation)
+            {
+                if (parts.Length < 2)
+                    throw new ArgumentException("FPU store requires a destination operand");
+
+                var operand = ParseOperand(parts[1]);
+                return operation(operand);
+            }
         }
 
         // Driver implementation methods
