@@ -54,13 +54,7 @@ namespace Nebulyn
             int loops = 5;
 
             SGenericStatus returnValue = runtimeExecution.CreateScript()
-                .Mov(Register.ECX, loops)
-                .Xor(Operand.Reg(Register.EAX), Operand.Reg(Register.EAX))
-                .Label("TLabel")
-                .Inc(Operand.Reg(Register.EAX))
-                .Loop("TLabel")
-                .Label("TEnd")
-                .Ret()
+                
                 .ExecuteWithReturn(out int runtimeResult);
 
             if (returnValue.IsSuccess)
